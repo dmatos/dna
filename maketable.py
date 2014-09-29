@@ -50,6 +50,7 @@ species_code - codigo do organismo
 def makeGenesDict(genesDict, koDict, genes, species_code):
     for gene in genes:
         try: 
+        
             geneTemp = gene.split('\t')[1].split(':')[1]
             defs = keggrest.RESTrequest('find/genes/'+geneTemp)
             #print defs
@@ -57,12 +58,13 @@ def makeGenesDict(genesDict, koDict, genes, species_code):
             definition = defsSplited[1] 
             if(definition.startswith(' K')):
                 definition = defsSplited[0].replace(gene.split('\t')[1], '')
-            #print definition                           
-            #definition = definition.split(' (')[0]          
+            #print definition             
             
             koList = keggrest.RESTrequest('link/ko/'+defsSplited[0]).split('\n')[0:-1]              
             
             koCode = koList[0].split('\t')[1]
+            koCode = koCode.split(':')[1]
+                        
             if (koCode not in koDict):
                 koDict[koCode] = definition
                 genesDict[koCode] = {}
@@ -79,12 +81,13 @@ pathway         - pathway code
 organismsNames  - list of organisms names
 organisms       - list of abreviations of organisms
 '''    
-def pathwayComparisonTable(pathway, organismsNames, organisms):
+def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
     print 'creating page for '+pathway
     htmlFileName = pathway + '_comparison_table.html'
     html = open('../'+htmlFileName, 'w')
     html.write('<html><head><title>Pathway %s</title></head>\n<body>\n' % (pathway))
     html.write('<h1 > <a href="http://www.genome.jp/kegg/pathway/map/map%s.html"> Pathway %s </a> </h1>' % (pathway, pathway))
+       
     html.write('<table border="1">\n')
     html.write('<tr><td rowspan="2"><center>Genes</center></td>\n')  
     
@@ -138,8 +141,10 @@ def pathwayComparisonTable(pathway, organismsNames, organisms):
                 html.write('<td><center>-</center></td>')     
         html.write('</tr>\n') 
     html.write('</table>\n') 
+    html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koDict.keys()), num_of_enzymes, pathway)) 
     html.write('</body>\n') 
     html.write('</html>\n') 
+    html.close()
         
 def create_genes_def_page(species_code, genes, pathway, create_html=False):
     filename = 'genes_of_' + species_code + '_in_' + pathway + '.html'    
@@ -266,7 +271,7 @@ def pathways_cross_organisms(pathwaysLen, organismsLen, htmlFileName, link, args
 
         html.write('</tr>\n')
         #writes pathway comparison table page
-        pathwayComparisonTable(pathway, organismsNames, organisms)
+        pathwayComparisonTable(pathway, organismsNames, organisms, number_of_enzymes[pathway])
     
     if link=='commoncolors.html':
         html.write('</table>\n<br /><a href="%s">See common colors</a>\n</body>\n</html>\n' % (link))
