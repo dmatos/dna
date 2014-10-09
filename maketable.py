@@ -8,7 +8,7 @@
 # Using KEGG API: http://www.kegg.jp/kegg/docs/keggapi.html
 
 from keggrest import *
-import sys
+import sys, traceback
 
 #list of colors
 # red = FF0000, green = 00FF00, blue = 0000FF
@@ -49,8 +49,7 @@ species_code - codigo do organismo
 '''
 def makeGenesDict(genesDict, koDict, genes, species_code):
     for gene in genes:
-        try: 
-        
+        try:         
             geneTemp = gene.split('\t')[1].split(':')[1]
             defs = keggrest.RESTrequest('find/genes/'+geneTemp)
             #print defs
@@ -60,19 +59,26 @@ def makeGenesDict(genesDict, koDict, genes, species_code):
                 definition = defsSplited[0].replace(gene.split('\t')[1], '')
             #print definition             
             
-            koList = keggrest.RESTrequest('link/ko/'+defsSplited[0]).split('\n')[0:-1]              
+            koList = keggrest.RESTrequest('link/ko/'+defsSplited[0]).split('\n')[0:-1]           
             
             koCode = koList[0].split('\t')[1]
             koCode = koCode.split(':')[1]
                         
-            if (koCode not in koDict):
-                koDict[koCode] = definition
-                genesDict[koCode] = {}
+            if ((koCode, definition) not in koDict):
+                koDict[(koCode, definition)] = {}
+                #genesDict[koCode] = {}
             
-            genesDict[koCode][species_code] = gene.split('\t')[1]
+            if species_code not in koDict[(koCode, definition)]:
+                koDict[(koCode, definition)][species_code] = []
             
-        except:
-            print 'NO DEFINITION FOUND FOR ' + gene + ' IN ' + species_code
+            #genesDict[koCode][species_code] = gene.split('\t')[1]
+            koDict[(koCode, definition)][species_code].append(gene.split('\t')[1])
+            
+        except Exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback.print_tb(exc_traceback)
+            traceback.print_exception(exc_type, exc_value, exc_traceback)
+            print ('NO DEFINITION FOUND FOR ' + gene + ' IN ' + species_code)
             
 '''
 Creates comparison table of organisms for a given pathway.
@@ -82,14 +88,22 @@ organismsNames  - list of organisms names
 organisms       - list of abreviations of organisms
 '''    
 def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
-    print 'creating page for '+pathway
+    print ('creating page for '+pathway)
     htmlFileName = pathway + '_comparison_table.html'
     html = open('../'+htmlFileName, 'w')
-    html.write('<html><head><title>Pathway %s</title></head>\n<body>\n' % (pathway))
+    html.write('<html><head>\n')
+    html.write('<title>Pathway %s</title>\n' % (pathway))    
+    html.write('<script type="text/javascript" src="javascript/tablesorter-master/jquery-latest.js"></script>\n') 
+    html.write('<script type="text/javascript" src="javascript/tablesorter-master/jquery.tablesorter.js"></script>\n')
+    html.write('<script type="text/javascript" src="javascript/tablesorter.js"></script>\n')    
+    html.write('<link rel="stylesheet" href="css/style.css" type="text/css">\n')
+    html.write('</head>\n<body>\n')
     html.write('<h1 > <a href="http://www.genome.jp/kegg/pathway/map/map%s.html"> Pathway %s </a> </h1>' % (pathway, pathway))
        
-    html.write('<table border="1">\n')
-    html.write('<tr><td rowspan="2"><center>Genes</center></td>\n')  
+    html.write('<table border="1" class="tablesorter">\n')
+    html.write('<thead>\n')
+    html.write('<tr><td rowspan="2"><center>Genes</center></td>\n')
+    #html.write('<tr><td><center> - </center></td>\n')    
     
     organismsCounter = []
     for i in range(len(organismsNames)):
@@ -102,7 +116,9 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
         #print count
         organismsCounter.append(count)
         html.write('<td colspan="%d" bgcolor="%s">%s</td>\n' % (count, colors[i], organismsNames[i]))
-    html.write('</tr>\n') 
+    html.write('</tr>\n')
+    
+    #html.write('<tr><td><center> - </center></td>\n') 
     
     #dictionary ko -> species_code -> gene_code
     genesDict = {}
@@ -120,26 +136,57 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
         #print colorCount
         color = colors[colorCount]
         indexOfDefinition = str(organisms[i]).find(';')
-        html.write('<td bgcolor="%s"><center><a href="http://www.kegg.jp/kegg-bin/show_organism?org=%s" title="%s">%s</a> <br /><font size=1>%d</font></center></td>\n' % (color, species_code, organisms[i][indexOfDefinition+1], species_code, len(keggrest.RESTrequest('list/'+species_code).split('\n'))-1))
+        html.write('<th bgcolor="%s"><center><a href="http://www.kegg.jp/kegg-bin/show_organism?org=%s" title="%s">%s</a> <br /><font size=1>%d</font></center></th>\n' % (color, species_code, organisms[i][indexOfDefinition+1], species_code, len(keggrest.RESTrequest('list/'+species_code).split('\n'))-1))
         #print species_code
         genes = keggrest.RESTrequest('link/genes/'+species_code+pathway).split('\n')[0:-1] 
         #print genes                               
         if (len(genes) > 0 and len(genes[0]) > 0):
             makeGenesDict(genesDict, koDict, genes, species_code)
     html.write('</tr>\n')
+    html.write('</thead>\n')
+    
+    html.write('<tbody>')
             
+    species_counter = {}
     #dictionaries ares complete, creating table of comparison
-    for key in genesDict.keys():
+    for (koCode,definition) in koDict.keys():
         #print key
         html.write('<tr>\n')           
-        html.write('<td>%s</td>' % (koDict[key]))
+        html.write('<td>%s</td>' % (definition))
         for i in range(len(organisms)):
             species_code = organisms[i][14:17]
-            if species_code in genesDict[key]:
-                html.write('<td><a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a></td>' % (genesDict[key][species_code],genesDict[key][species_code]))
+            if species_code not in species_counter.keys():
+                species_counter[species_code] = 0
+            if species_code in koDict[(koCode,definition)].keys():
+                html.write('<td>');
+                if(len(koDict[(koCode,definition)][species_code]) == 1):                                       
+                    html.write('<a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a>' % (koDict[(koCode,definition)][species_code][0], koDict[(koCode,definition)][species_code][0]))                    
+                    species_counter[species_code] = species_counter[species_code] + 1
+                elif(len(koDict[(koCode,definition)][species_code]) > 1):                      
+                    species_counter[species_code] = species_counter[species_code] + len(koDict[(koCode,definition)][species_code])
+                    for gene in sorted(koDict[(koCode,definition)][species_code]):                        
+                        html.write('<a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a></br>' % (gene, gene))
+                html.write('</td>');
             else:
-                html.write('<td><center>-</center></td>')     
+                html.write('<td style="min-width:100px"><center style="color:#FFFFFF">    </center></td>')                    
         html.write('</tr>\n') 
+    html.write('</tbody>')
+    html.write('<tfoot>\n<tr>')    
+    html.write('<td>Totals</td>')
+    colorCount = 0
+    leftCounter = 0
+    for i in range(len(organisms)):
+        species_code = organisms[i][14:17]
+        if i == organismsCounter[colorCount] + leftCounter: 
+                colorCount = colorCount + 1
+                leftCounter = i
+        #print colorCount
+        color = colors[colorCount]
+        if species_code in species_counter.keys():
+            html.write('<td bgcolor="%s"><center>%d</center></td>' % (color,species_counter[species_code]))
+        else:
+            html.write('<td bgcolor="%s"><center>0</center></td>' % (color))
+    html.write('</tr>\n</tfoot>')
     html.write('</table>\n') 
     html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koDict.keys()), num_of_enzymes, pathway)) 
     html.write('</body>\n') 
@@ -213,7 +260,7 @@ def pathways_cross_organisms(pathwaysLen, organismsLen, htmlFileName, link, args
             
     organisms = list_organisms(organismsNames)
     
-    print 'creating page '+htmlFileName
+    print ('creating page '+htmlFileName)
     html = open('../'+htmlFileName, 'w')
     html.write('<html><head><title>Species</title></head>\n<body>\n')
     html.write('<table border="1">\n')
