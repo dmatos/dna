@@ -178,8 +178,6 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
     presence_html.write('<tbody>')            
     
     species_counter = {}
-    #dictionaries ares complete, creating table of comparison
-    #print '...................'
     koCode_counter = set()
     for (koCode,definition) in koDict.keys():       
         koCode_counter.add(koCode)
