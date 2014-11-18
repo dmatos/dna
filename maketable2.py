@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Created in: Jun 19, 2014
-# Last modified in: Sep 27, 2014
+# Last modified in: Nov 18, 2014
 # Author: Diogo Matos <dmatos88@gmail.com>
 # Based on: create_tabley.py by Leandro Lima <llima@ime.usp.br>
 # Using KEGG REST python API: https://pypi.python.org/pypi/keggrest/0.1.1
@@ -39,6 +39,10 @@ def generateHeatmapColor(h, colorIndex):
         color = '#CC'+2*h+'00'
     return color
     
+
+#TODO tenho que colocar um dicionario KO - definition (checar se tem outro nome que nao seja hipothetical...)
+#TODO tenho que coloar um dicionario KO - lista de organismos
+    
 '''
 Insert entries to both genes dictionary and kegg orthology dictionary given
 a species code and its genes on a specific pathway.
@@ -69,17 +73,18 @@ def makeGenesDict(genesDict, koDict, genes, species_code):
             
             koCode = koList[0].split('\t')[1]
             koCode = koCode.split(':')[1]              
-                        
-            if ((koCode, definition) not in koDict):
-                koDict[(koCode, definition)] = {}
-                #genesDict[koCode] = {}
             
-            if species_code not in koDict[(koCode, definition)]:
-                koDict[(koCode, definition)][species_code] = []
-            
-            #genesDict[koCode][species_code] = gene.split('\t')[1]            
-            koDict[(koCode, definition)][species_code].append(gene.split('\t')[1])
-            
+            if koCode not in koDict.keys():            	
+            	koDict[koCode] = definition
+            	genesDict[koCode] = {}            	
+            elif koDict[koCode].find("hypothetical") > 0 and definition.find("hypothetical") == -1:
+            	koDict[koCode] = definition
+            if species_code not in genesDict[koCode].keys():
+            	genesDict[koCode][species_code] = []
+
+
+            genesDict[koCode][species_code].append(gene.split('\t')[1])
+        
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             traceback.print_tb(exc_traceback)
@@ -178,10 +183,9 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
     presence_html.write('<tbody>')            
     
     species_counter = {}
-    koCode_counter = set()
-    for (koCode,definition) in koDict.keys():       
-        koCode_counter.add(koCode)
+    for koCode in koDict.keys():    
         #print str((koCode,definition)) +'\n'
+        definition = koDict[koCode]
         html.write('<tr>\n')           
         html.write('<td>%s</td>' % (definition))
         presence_html.write('<tr>\n')           
@@ -196,16 +200,16 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
             species_code = organisms[i][14:17]
             if species_code not in species_counter.keys():
                 species_counter[species_code] = 0
-            if species_code in koDict[(koCode,definition)].keys():               
+            if species_code in genesDict[koCode].keys():               
                 html.write('<td>')                
-                if(len(koDict[(koCode,definition)][species_code]) == 1):                                                          
-                    html.write('<a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a>' % (koDict[(koCode,definition)][species_code][0], koDict[(koCode,definition)][species_code][0]))                   
+                if(len(genesDict[koCode][species_code]) == 1):                                                          
+                    html.write('<a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a>' % (genesDict[koCode][species_code][0], genesDict[koCode][species_code][0]))                   
                     species_counter[species_code] = species_counter[species_code] + 1
                     presence_html.write('<td bgcolor="%s" color="%s"> <center>---</center>' % (color, color))
-                elif(len(koDict[(koCode,definition)][species_code]) > 1):                      
-                    species_counter[species_code] = species_counter[species_code] + len(koDict[(koCode,definition)][species_code])
+                elif(len(genesDict[koCode][species_code]) > 1):                      
+                    species_counter[species_code] = species_counter[species_code] + len(genesDict[koCode][species_code])
                     presence_html.write('<td bgcolor="%s" color="%s"> ' % (color, color))                    
-                    for gene in sorted(koDict[(koCode,definition)][species_code]):                                               
+                    for gene in sorted(genesDict[koCode][species_code]):                                               
                         html.write('<a href="http://www.genome.jp/dbget-bin/www_bget?%s">%s</a></br>' % (gene, gene))
                         presence_html.write('<center>---</center></br>')
                 html.write('</td>');
@@ -239,7 +243,7 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
             presence_html.write('<td bgcolor="%s"><center>0</center></td>' % (color))
     html.write('</tr>\n</tfoot>')
     html.write('</table>\n') 
-    html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koCode_counter), num_of_enzymes, pathway)) 
+    html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koDict.keys()), num_of_enzymes, pathway)) 
     html.write('<br/>')
     html.write('<a href="%s"> See presence table </a>' % (pathway + '_presence_table.html'))
     html.write('</body>\n') 
@@ -247,7 +251,7 @@ def pathwayComparisonTable(pathway, organismsNames, organisms, num_of_enzymes):
     html.close()
     presence_html.write('</tr>\n</tfoot>')
     presence_html.write('</table>\n') 
-    presence_html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koCode_counter), num_of_enzymes, pathway)) 
+    presence_html.write('<p>Table containing %d out of a total of %d genes of the Pathway %s</p>\n' % (len(koDict.keys()), num_of_enzymes, pathway)) 
     presence_html.write('<br/>')
     presence_html.write('<a href="%s"> See comparison table </a>' % (pathway + '_comparison_table.html'))
     presence_html.write('</body>\n') 
